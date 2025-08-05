@@ -8,12 +8,26 @@
 
 // Must compile with -lws2_32 -lcomdlg32
 
+// Version 1.1
+const int versionId = 10001;
+
 void reciever(SOCKET);
 
 void handleClient(SOCKET);
 
+void checkIfUserIsOnline(int);
+
+char username[64][1024];
+unsigned long ip[64];
+int userStatu[64];
+char groupname[64][1024] = { "everyone" };
+unsigned long long usersInGroup[64];
+
 int main(int argc, char** argv)
 {
+	fputs("Welcome to the File and Clipboard Transfer 1.1 !\n", stderr);
+	fputs("Type \"help\" for a list of available commands.\n", stderr);
+
 	WSADATA wsaData;
 	if (WSAStartup(MAKEWORD(2, 2), &wsaData) != 0)
 	{
@@ -51,11 +65,8 @@ int main(int argc, char** argv)
 
 	CreateThread(nullptr, 0, (LPTHREAD_START_ROUTINE)reciever, (LPVOID)sock, 0, nullptr);
 
-	char username[64][1024];
-	unsigned long ip[64];
-	char groupname[64][1024];
-	unsigned long long usersInGroup[64];
-	sprintf(groupname[0], "everyone");
+	for (int i = 0; i < 64; ++i)
+		CreateThread(nullptr, 0, (LPTHREAD_START_ROUTINE)checkIfUserIsOnline, (LPVOID)i, 0, nullptr);
 
 	while (true)
 	{
@@ -85,7 +96,7 @@ int main(int argc, char** argv)
 			fputs("\"removeuser <username> from <groupname>\" - remove a user from a group\n", stderr);
 			fputs("\"listusers in <groupname>\" - list all users in a group\n", stderr);
 			fputs("\"deletegroup <groupname>\" - delete a group\n", stderr);
-			fputs("\"listgroups\" - list and groups\n", stderr);
+			fputs("\"listgroups\" - list all groups\n", stderr);
 		}
 		else if (strcmp(s1, "send") == 0 && strcmp(s2, "cp") != 0 && strcmp(s3, "to") == 0)
 		{
@@ -137,9 +148,9 @@ int main(int argc, char** argv)
 					send(clientSocket, (const char*)(&sufnameLen), 4, 0);
 					send(clientSocket, s2 + s2Len - sufnameLen, sufnameLen, 0);
 					fseek(file, 0, SEEK_END);
-					int fileLen = ftell(file);
+					unsigned long long fileLen = ftell(file);
 					fseek(file, 0, SEEK_SET);
-					send(clientSocket, (const char*)(&fileLen), 4, 0);
+					send(clientSocket, (const char*)(&fileLen), 8, 0);
 					char buffer[1024];
 					while (fileLen > 0)
 					{
@@ -189,13 +200,13 @@ int main(int argc, char** argv)
 							const wchar_t *data = (const wchar_t*)GlobalLock(hData);
 							if (data != nullptr)
 							{
-								unsigned int dataLen = 0;
+								unsigned long long dataLen = 0;
 								while (data[dataLen] != L'\0')
 									++dataLen;
-								dataLen = (dataLen + 1) << 1;
+								dataLen <<= 1;
 								const unsigned int value = 0xFFFFFFFF;
 								send(clientSocket, (const char*)(&value), 4, 0);
-								send(clientSocket, (const char*)(&dataLen), 4, 0);
+								send(clientSocket, (const char*)(&dataLen), 8, 0);
 								send(clientSocket, (const char*)(data), dataLen, 0);
 							}
 							GlobalUnlock(hData);
@@ -374,34 +385,7 @@ int main(int argc, char** argv)
 			for (int i = 0; i < 64; ++i)
 				if (usersInGroup[slot] & (1ULL << i))
 				{
-					fprintf(stderr, "%s: ", username[i]);
-					SOCKET clientSocket = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
-					if (clientSocket == INVALID_SOCKET)
-					{
-						fputs("socket failed.\n", stderr);
-						continue;
-					}
-					SOCKADDR_IN clientAddr;
-					clientAddr.sin_family = AF_INET;
-					clientAddr.sin_port = htons(11451);
-					clientAddr.sin_addr.s_addr = ip[i];
-					if (connect(clientSocket, (SOCKADDR*)&clientAddr, sizeof(clientAddr)) == SOCKET_ERROR)
-					{
-						fputs("not online.\n", stderr);
-						closesocket(clientSocket);
-						continue;
-					}
-					const unsigned int value = 0xFFFFFFFE;
-					send(clientSocket, (const char*)(&value), 4, 0);
-					recv(clientSocket, (char*)(&value), 4, 0);
-					if (value != 0xFFFFFFFE)
-					{
-						fputs("not online.\n", stderr);
-						closesocket(clientSocket);
-						continue;
-					}
-					fputs("online.\n", stderr);
-					closesocket(clientSocket);
+					fprintf(stderr, "%s: %s\n", username[i], userStatu[i] == 1 ? "online" : userStatu[i] == 0 ? "offline" : "different version");
 				}
 			fputs("done.\n", stderr);
 		}
@@ -437,34 +421,7 @@ int main(int argc, char** argv)
 					for (int j = 0; j < 64; ++j)
 						if (usersInGroup[i] & (1ULL << j))
 						{
-							fprintf(stderr, "\t%s: ", username[j]);
-							SOCKET clientSocket = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
-							if (clientSocket == INVALID_SOCKET)
-							{
-								fputs("socket failed.\n", stderr);
-								continue;
-							}
-							SOCKADDR_IN clientAddr;
-							clientAddr.sin_family = AF_INET;
-							clientAddr.sin_port = htons(11451);
-							clientAddr.sin_addr.s_addr = ip[i];
-							if (connect(clientSocket, (SOCKADDR*)&clientAddr, sizeof(clientAddr)) == SOCKET_ERROR)
-							{
-								fputs("not online.\n", stderr);
-								closesocket(clientSocket);
-								continue;
-							}
-							const unsigned int value = 0xFFFFFFFE;
-							send(clientSocket, (const char*)(&value), 4, 0);
-							recv(clientSocket, (char*)(&value), 4, 0);
-							if (value != 0xFFFFFFFE)
-							{
-								fputs("not online.\n", stderr);
-								closesocket(clientSocket);
-								continue;
-							}
-							fputs("online.\n", stderr);
-							closesocket(clientSocket);
+							fprintf(stderr, "\t%s: %s\n", username[j], userStatu[j] == 1 ? "online" : userStatu[j] == 0 ? "offline" : "different version");
 						}
 				}
 			fputs("done.\n", stderr);
@@ -493,20 +450,32 @@ void reciever(SOCKET socket)
 
 void handleClient(SOCKET socket)
 {
-	unsigned int sufnameLen = 0;
+	SOCKADDR_STORAGE address;
+	int addressSize = sizeof(address);
+	getpeername(socket, (SOCKADDR *)&address, &addressSize);
+
+	unsigned int sufnameLen = 0xFFFFFFFEU;
+	unsigned long long fileLen = 0xFFFFFFFFFFFFFFFFULL;
 	recv(socket, (char*)(&sufnameLen), 4, 0);
-	bool saveToClipboard = false;
+	bool saveToClipboard = false, ifSave = true;
 	char* sufname = nullptr;
-	if (sufnameLen == 0xFFFFFFFF)
+	if (sufnameLen == 0xFFFFFFFFU)
 	{
-		int result = MessageBox(nullptr, "Do you want to save it to your clipboard?", "File Transfer", MB_YESNO | MB_ICONQUESTION);
+		recv(socket, (char*)(&fileLen), 8, 0);
+		char *str = new char[1024];
+		sprintf(str, "Do you want to save it to the clipboard?\n"
+			"Choose \"Yes\" to save it to the clipboard, \"No\" to save it to a file, or \"Cancel\" to discard it.\n"
+			"From %s (%s), %llu bytes.", username[0], inet_ntoa(((SOCKADDR_IN *)(&address))->sin_addr), fileLen);
+		int result = MessageBox(nullptr, str, "File Transfer", MB_YESNOCANCEL | MB_ICONQUESTION);
 		if (result == IDYES)
 			saveToClipboard = true;
+		else if (result == IDCANCEL)
+			ifSave = false;
 	}
-	else if (sufnameLen == 0xFFFFFFFE)
+	else if (sufnameLen == 0xFFFFFFFEU)
 	{
 		// check if this user is online
-		send(socket, (const char*)(&sufnameLen), 4, 0);
+		send(socket, (const char*)(&versionId), 4, 0);
 		closesocket(socket);
 		return;
 	}
@@ -515,19 +484,35 @@ void handleClient(SOCKET socket)
 		sufname = new char[sufnameLen + 1];
 		recv(socket, sufname, sufnameLen, 0);
 		sufname[sufnameLen] = '\0';
+		int slot = -1;
+		for (int i = 0; i < 64; ++i)
+			if (ip[i] == ((SOCKADDR_IN *)(&address))->sin_addr.s_addr && username[i][0] != '\0')
+			{
+				slot = i;
+				break;
+			}
+		recv(socket, (char*)(&fileLen), 8, 0);
+		char *str = new char[1536 + sufnameLen];
+		sprintf(str, "Do you want to save it?\n"
+			"Choose \"Yes\" to save it, or \"No\" to discard it.\n"
+			"From %s (%s), %llu bytes.", slot == -1 ? "unknown" : username[slot], inet_ntoa(((SOCKADDR_IN *)(&address))->sin_addr), fileLen);
+		int result = MessageBox(nullptr, str, "File Transfer", MB_YESNO | MB_ICONQUESTION);
+		if (result == IDNO)
+			ifSave = false;
+		delete []str;
 	}
-	unsigned int fileLen = 0;
-	if (recv(socket, (char*)(&fileLen), 4, 0) == 4)
+	if (ifSave && fileLen != 0xFFFFFFFFFFFFFFFFULL)
 		if (saveToClipboard)
 		{
 			if (OpenClipboard(nullptr))
 			{
 				EmptyClipboard();
-				HGLOBAL hMem = GlobalAlloc(GMEM_MOVEABLE, fileLen);
+				HGLOBAL hMem = GlobalAlloc(GMEM_MOVEABLE, fileLen + 2);
 				if (hMem != nullptr)
 				{
 					char* buffer = (char*)GlobalLock(hMem);
 					recv(socket, buffer, fileLen, 0);
+					buffer[fileLen] = buffer[fileLen + 1] = '\0';
 					GlobalUnlock(hMem);
 					SetClipboardData(CF_UNICODETEXT, hMem);
 				}
@@ -589,4 +574,44 @@ void handleClient(SOCKET socket)
 		delete[] sufname;
 	send(socket, "done", 4, 0);
 	closesocket(socket);
+}
+
+void checkIfUserIsOnline(int slot)
+{
+	while (true)
+	{
+		Sleep(1000);
+		if (ip[slot] != 0)
+		{
+			SOCKET clientSocket = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
+			if (clientSocket == INVALID_SOCKET)
+			{
+				userStatu[slot] = 0;
+				continue;
+			}
+			SOCKADDR_IN clientAddr;
+			clientAddr.sin_family = AF_INET;
+			clientAddr.sin_port = htons(11451);
+			clientAddr.sin_addr.s_addr = ip[slot];
+			if (connect(clientSocket, (SOCKADDR*)&clientAddr, sizeof(clientAddr)) == SOCKET_ERROR)
+			{
+				userStatu[slot] = 0;
+				closesocket(clientSocket);
+				continue;
+			}
+			unsigned int value = 0xFFFFFFFEU;
+			send(clientSocket, (const char*)(&value), 4, 0);
+			recv(clientSocket, (char*)(&value), 4, 0);
+			if (value != versionId)
+			{
+				userStatu[slot] = -1;
+				closesocket(clientSocket);
+				continue;
+			}
+			userStatu[slot] = 1;
+			closesocket(clientSocket);
+		}
+		else
+			userStatu[slot] = 0;
+	}
 }
