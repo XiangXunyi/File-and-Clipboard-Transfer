@@ -8,8 +8,8 @@
 
 // Must compile with -lws2_32 -lcomdlg32
 
-// Version 1.1
-const int versionId = 10001;
+// Version 1.2
+const int versionId = 10002;
 
 void reciever(SOCKET);
 
@@ -25,8 +25,10 @@ unsigned long long usersInGroup[64];
 
 int main(int argc, char** argv)
 {
-	fputs("Welcome to the File and Clipboard Transfer 1.1 !\n", stderr);
-	fputs("Type \"help\" for a list of available commands.\n", stderr);
+	// for (int i = 0; i < 100; ++i)
+	// 	printf("%d: \033[%dmword\033[0m\n", i, i);
+	fputs("Welcome to the File and Clipboard Transfer 1.2 !\n", stderr);
+	fputs("Type \033[30m\"help\"\033[0m for a list of available commands.\n", stderr);
 
 	WSADATA wsaData;
 	if (WSAStartup(MAKEWORD(2, 2), &wsaData) != 0)
@@ -71,32 +73,49 @@ int main(int argc, char** argv)
 	while (true)
 	{
 		fputs("\n> ", stderr);
-		char command[1024], s1[1024], s2[1024], s3[1024], s4[1024];
+		char command[1024], s[4][1024];
+		char* s1 = s[0], * s2 = s[1], * s3 = s[2], * s4 = s[3];
+		ZeroMemory(command, 1024);
+		ZeroMemory(s1, 1024);
+		ZeroMemory(s2, 1024);
+		ZeroMemory(s3, 1024);
+		ZeroMemory(s4, 1024);
 		fgets(command, 1024, stdin);
 		int len = strlen(command);
 		for (int i = 0; i < len; ++i)
 			if ('A' <= command[i] && command[i] <= 'Z')
 				command[i] += 32;
-		sscanf(command, "%s%s%s%s", s1, s2, s3, s4);
+		for (int i = 0, subLen = 0, slot = 0, inMark = 0; i < len && slot < 4; ++i)
+			if (command[i] == '\"')
+				inMark ^= 1;
+			else if ((command[i] == ' ' || command[i] == '\n' || command[i] == '\r') && inMark == 0 && subLen != 0)
+			{
+				subLen = 0;
+				++slot;
+			}
+			else
+				s[slot][subLen++] = command[i];
 		if (strcmp(s1, "exit") == 0)
 			break;
 		else if (strcmp(s1, "help") == 0)
 		{
 			fputs("Available commands:\n", stderr);
-			fputs("\"exit\" - exit the program\n", stderr);
-			fputs("\"help\" - display this message\n", stderr);
-			fputs("\"send <filename> to <username>\" - send a file to a user\n", stderr);
-			fputs("\"send cp to <username>\" - send your clipboard to a user\n", stderr);
-			fputs("\"send <filename> to <groupname>\" - send a file to all users in a group\n", stderr);
-			fputs("\"send cp to <groupname>\" - send your clipboard to all users in a group\n", stderr);
-			fputs("\"newuser <username> <ip>\" - create a new user\n", stderr);
-			fputs("\"deleteuser <username>\" - delete a user\n", stderr);
-			fputs("\"newgroup <groupname>\" - create a new group\n", stderr);
-			fputs("\"adduser <username> to <groupname>\" - add a user to a group\n", stderr);
-			fputs("\"removeuser <username> from <groupname>\" - remove a user from a group\n", stderr);
-			fputs("\"listusers in <groupname>\" - list all users in a group\n", stderr);
-			fputs("\"deletegroup <groupname>\" - delete a group\n", stderr);
-			fputs("\"listgroups\" - list all groups\n", stderr);
+			fputs("\033[30m\"exit\"\033[0m - exit the program\n", stderr);
+			fputs("\033[30m\"help\"\033[0m - display this message\n", stderr);
+			fputs("\033[30m\"send <filename> to <username>\"\033[0m - send a file to a user\n", stderr);
+			fputs("\033[30m\"send \"<filename>\" to <username>\"\033[0m - send a file with special name to a user\n", stderr);
+			fputs("\033[30m\"send cp to <username>\"\033[0m - send your clipboard to a user\n", stderr);
+			fputs("\033[30m\"send <filename> to <groupname>\"\033[0m - send a file to all users in a group\n", stderr);
+			fputs("\033[30m\"send \"<filename>\" to <groupname>\"\033[0m - send a file with special name to all users in a group\n", stderr);
+			fputs("\033[30m\"send cp to <groupname>\"\033[0m - send your clipboard to all users in a group\n", stderr);
+			fputs("\033[30m\"newuser <username> <ip>\"\033[0m - create a new user\n", stderr);
+			fputs("\033[30m\"deleteuser <username>\"\033[0m - delete a user\n", stderr);
+			fputs("\033[30m\"newgroup <groupname>\"\033[0m - create a new group\n", stderr);
+			fputs("\033[30m\"adduser <username> to <groupname>\"\033[0m - add a user to a group\n", stderr);
+			fputs("\033[30m\"removeuser <username> from <groupname>\"\033[0m - remove a user from a group\n", stderr);
+			fputs("\033[30m\"listusers in <groupname>\"\033[0m - list all users in a group\n", stderr);
+			fputs("\033[30m\"deletegroup <groupname>\"\033[0m - delete a group\n", stderr);
+			fputs("\033[30m\"listgroups\"\033[0m - list all groups\n", stderr);
 		}
 		else if (strcmp(s1, "send") == 0 && strcmp(s2, "cp") != 0 && strcmp(s3, "to") == 0)
 		{
@@ -111,10 +130,18 @@ int main(int argc, char** argv)
 				if (receivers & (1ULL << i))
 				{
 					fprintf(stderr, "Sending file to %s: ", username[i]);
+					if (userStatu[i] != 1)
+					{
+						if (userStatu[i] == 0)
+							fputs("\033[91muser is offline.\033[0m\n", stderr);
+						else
+							fputs("\033[91muser is using different version of the program.\033[0m\n", stderr);
+						continue;
+					}
 					SOCKET clientSocket = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
 					if (clientSocket == INVALID_SOCKET)
 					{
-						fputs("socket failed.\n", stderr);
+						fputs("\033[91msocket failed.\033[0m\n", stderr);
 						continue;
 					}
 					SOCKADDR_IN clientAddr;
@@ -123,14 +150,14 @@ int main(int argc, char** argv)
 					clientAddr.sin_addr.s_addr = ip[i];
 					if (connect(clientSocket, (SOCKADDR*)&clientAddr, sizeof(clientAddr)) == SOCKET_ERROR)
 					{
-						fputs("connect failed.\n", stderr);
+						fputs("\033[91mconnect failed.\033[0m\n", stderr);
 						closesocket(clientSocket);
 						continue;
 					}
-					FILE *file = fopen(s2, "rb");
+					FILE* file = fopen(s2, "rb");
 					if (file == nullptr)
 					{
-						fputs("fopen failed.\n", stderr);
+						fputs("\033[91mfopen failed.\033[0m\n", stderr);
 						closesocket(clientSocket);
 						continue;
 					}
@@ -147,9 +174,9 @@ int main(int argc, char** argv)
 							break;
 					send(clientSocket, (const char*)(&sufnameLen), 4, 0);
 					send(clientSocket, s2 + s2Len - sufnameLen, sufnameLen, 0);
-					fseek(file, 0, SEEK_END);
-					unsigned long long fileLen = ftell(file);
-					fseek(file, 0, SEEK_SET);
+					_fseeki64(file, 0, SEEK_END);
+					unsigned long long fileLen = _ftelli64(file);
+					_fseeki64(file, 0, SEEK_SET);
 					send(clientSocket, (const char*)(&fileLen), 8, 0);
 					char buffer[1024];
 					while (fileLen > 0)
@@ -160,7 +187,7 @@ int main(int argc, char** argv)
 					}
 					fclose(file);
 					closesocket(clientSocket);
-					fputs("done.\n", stderr);
+					fputs("\033[92mdone.\033[0m\n", stderr);
 				}
 		}
 		else if (strcmp(s1, "send") == 0 && strcmp(s2, "cp") == 0 && strcmp(s3, "to") == 0)
@@ -176,10 +203,18 @@ int main(int argc, char** argv)
 				if (receivers & (1ULL << i))
 				{
 					fprintf(stderr, "Sending clipboard to %s: ", username[i]);
+					if (userStatu[i] != 1)
+					{
+						if (userStatu[i] == 0)
+							fputs("\033[91muser is offline.\033[0m\n", stderr);
+						else
+							fputs("\033[91muser is using different version of the program.\033[0m\n", stderr);
+						continue;
+					}
 					SOCKET clientSocket = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
 					if (clientSocket == INVALID_SOCKET)
 					{
-						fputs("socket failed.\n", stderr);
+						fputs("\033[91msocket failed.\033[0m\n", stderr);
 						continue;
 					}
 					SOCKADDR_IN clientAddr;
@@ -188,7 +223,7 @@ int main(int argc, char** argv)
 					clientAddr.sin_addr.s_addr = ip[i];
 					if (connect(clientSocket, (SOCKADDR*)&clientAddr, sizeof(clientAddr)) == SOCKET_ERROR)
 					{
-						fputs("connect failed.\n", stderr);
+						fputs("\033[91mconnect failed.\033[0m\n", stderr);
 						closesocket(clientSocket);
 						continue;
 					}
@@ -197,7 +232,7 @@ int main(int argc, char** argv)
 						HANDLE hData = GetClipboardData(CF_UNICODETEXT);
 						if (hData != nullptr)
 						{
-							const wchar_t *data = (const wchar_t*)GlobalLock(hData);
+							const wchar_t* data = (const wchar_t*)GlobalLock(hData);
 							if (data != nullptr)
 							{
 								unsigned long long dataLen = 0;
@@ -214,7 +249,7 @@ int main(int argc, char** argv)
 						CloseClipboard();
 					}
 					closesocket(clientSocket);
-					fputs("done.\n", stderr);
+					fputs("\033[92mdone.\033[0m\n", stderr);
 				}
 		}
 		else if (strcmp(s1, "newuser") == 0)
@@ -223,7 +258,7 @@ int main(int argc, char** argv)
 			for (int i = 0; i < 64; ++i)
 				if (strcmp(s2, username[i]) == 0)
 				{
-					fputs("Username already exists.\n", stderr);
+					fputs("\033[91mUsername already exists.\033[0m\n", stderr);
 					flag = true;
 					break;
 				}
@@ -232,7 +267,7 @@ int main(int argc, char** argv)
 			for (int i = 0; i < 64; ++i)
 				if (strcmp(s2, groupname[i]) == 0)
 				{
-					fputs("Username already exists as a group name.\n", stderr);
+					fputs("\033[91mUsername already exists as a group name.\033[0m\n", stderr);
 					flag = true;
 					break;
 				}
@@ -248,13 +283,13 @@ int main(int argc, char** argv)
 				}
 			if (emptySlot == -1)
 			{
-				fputs("No empty slot available. The maximum number of users is 64.\n", stderr);
+				fputs("\033[91mNo empty slot available. The maximum number of users is 64.\033[0m\n", stderr);
 				continue;
 			}
 			strcpy(username[emptySlot], s2);
 			ip[emptySlot] = inet_addr(s3);
 			usersInGroup[0] |= 1ULL << emptySlot;
-			fputs("User created.\n", stderr);
+			fputs("\033[92mUser created.\033[0m\n", stderr);
 		}
 		else if (strcmp(s1, "deleteuser") == 0)
 		{
@@ -267,14 +302,14 @@ int main(int argc, char** argv)
 				}
 			if (slot == -1)
 			{
-				fputs("User not found.\n", stderr);
+				fputs("\033[91mUser not found.\033[0m\n", stderr);
 				continue;
 			}
 			for (int i = 0; i < 64; ++i)
 				usersInGroup[i] &= ~(1ULL << slot);
 			username[slot][0] = '\0';
 			ip[slot] = 0;
-			fputs("User deleted.\n", stderr);
+			fputs("\033[92mUser deleted.\033[0m\n", stderr);
 		}
 		else if (strcmp(s1, "newgroup") == 0)
 		{
@@ -282,7 +317,7 @@ int main(int argc, char** argv)
 			for (int i = 0; i < 64; ++i)
 				if (strcmp(s2, groupname[i]) == 0)
 				{
-					fputs("Group already exists.\n", stderr);
+					fputs("\033[91mGroup already exists.\033[0m\n", stderr);
 					flag = true;
 					break;
 				}
@@ -291,7 +326,7 @@ int main(int argc, char** argv)
 			for (int i = 0; i < 64; ++i)
 				if (strcmp(s2, username[i]) == 0)
 				{
-					fputs("Group name already exists as a username.\n", stderr);
+					fputs("\033[91mGroup name already exists as a username.\033[0m\n", stderr);
 					flag = true;
 					break;
 				}
@@ -307,12 +342,12 @@ int main(int argc, char** argv)
 				}
 			if (emptySlot == -1)
 			{
-				fputs("No empty slot available. The maximum number of groups is 64.\n", stderr);
+				fputs("\033[91mNo empty slot available. The maximum number of groups is 64.\033[0m\n", stderr);
 				continue;
 			}
 			strcpy(groupname[emptySlot], s2);
 			usersInGroup[emptySlot] = 0;
-			fputs("Group created.\n", stderr);
+			fputs("\033[92mGroup created.\033[0m\n", stderr);
 		}
 		else if (strcmp(s1, "adduser") == 0 && strcmp(s3, "to") == 0)
 		{
@@ -325,21 +360,21 @@ int main(int argc, char** argv)
 					groupSlot = i;
 			if (userSlot == -1)
 			{
-				fputs("User not found.\n", stderr);
+				fputs("\033[91mUser not found.\033[0m\n", stderr);
 				continue;
 			}
 			if (groupSlot == -1)
 			{
-				fputs("Group not found.\n", stderr);
+				fputs("\033[91mGroup not found.\033[0m\n", stderr);
 				continue;
 			}
 			if (groupSlot == 0)
 			{
-				fputs("Group \"everyone\" cannot be modified.\n", stderr);
+				fputs("\033[91mGroup \"everyone\" cannot be modified.\033[0m\n", stderr);
 				continue;
 			}
 			usersInGroup[groupSlot] |= 1ULL << userSlot;
-			fputs("User added to group.\n", stderr);
+			fputs("\033[92mUser added to group.\033[0m\n", stderr);
 		}
 		else if (strcmp(s1, "removeuser") == 0 && strcmp(s3, "from") == 0)
 		{
@@ -352,21 +387,21 @@ int main(int argc, char** argv)
 					groupSlot = i;
 			if (userSlot == -1)
 			{
-				fputs("User not found.\n", stderr);
+				fputs("\033[91mUser not found.\033[0m\n", stderr);
 				continue;
 			}
 			if (groupSlot == -1)
 			{
-				fputs("Group not found.\n", stderr);
+				fputs("\033[91mGroup not found.\033[0m\n", stderr);
 				continue;
 			}
 			if (groupSlot == 0)
 			{
-				fputs("Group \"everyone\" cannot be modified.\n", stderr);
+				fputs("\033[91mGroup \"everyone\" cannot be modified.\033[0m\n", stderr);
 				continue;
 			}
 			usersInGroup[groupSlot] &= ~(1ULL << userSlot);
-			fputs("User removed from group.\n", stderr);
+			fputs("\033[92mUser removed from group.\033[0m\n", stderr);
 		}
 		else if (strcmp(s1, "listusers") == 0 && strcmp(s2, "in") == 0)
 		{
@@ -379,15 +414,15 @@ int main(int argc, char** argv)
 				}
 			if (slot == -1)
 			{
-				fputs("Group not found.\n", stderr);
+				fputs("\033[91mGroup not found.\033[0m\n", stderr);
 				continue;
 			}
 			for (int i = 0; i < 64; ++i)
 				if (usersInGroup[slot] & (1ULL << i))
 				{
-					fprintf(stderr, "%s: %s\n", username[i], userStatu[i] == 1 ? "online" : userStatu[i] == 0 ? "offline" : "different version");
+					fprintf(stderr, "%s: %s\n", username[i], userStatu[i] == 1 ? "\033[92monline\033[0m" : userStatu[i] == 0 ? "\033[91moffline\033[0m" : "\033[93mdifferent version\033[0m");
 				}
-			fputs("done.\n", stderr);
+			fputs("\033[92mdone.\033[0m\n", stderr);
 		}
 		else if (strcmp(s1, "deletegroup") == 0)
 		{
@@ -400,17 +435,17 @@ int main(int argc, char** argv)
 				}
 			if (slot == -1)
 			{
-				fputs("Group not found.\n", stderr);
+				fputs("\033[91mGroup not found.\033[0m\n", stderr);
 				continue;
 			}
 			if (slot == 0)
 			{
-				fputs("Group \"everyone\" cannot be deleted.\n", stderr);
+				fputs("\033[91mGroup \"everyone\" cannot be deleted.\033[0m\n", stderr);
 				continue;
 			}
 			groupname[slot][0] = '\0';
 			usersInGroup[slot] = 0;
-			fputs("Group deleted.\n", stderr);
+			fputs("\033[92mGroup deleted.\033[0m\n", stderr);
 		}
 		else if (strcmp(s1, "listgroups") == 0)
 		{
@@ -421,14 +456,14 @@ int main(int argc, char** argv)
 					for (int j = 0; j < 64; ++j)
 						if (usersInGroup[i] & (1ULL << j))
 						{
-							fprintf(stderr, "\t%s: %s\n", username[j], userStatu[j] == 1 ? "online" : userStatu[j] == 0 ? "offline" : "different version");
+							fprintf(stderr, "\t%s: %s\n", username[j], userStatu[j] == 1 ? "\033[92monline\033[0m" : userStatu[j] == 0 ? "\033[91moffline\033[0m" : "\033[93mdifferent version\033[0m");
 						}
 				}
-			fputs("done.\n", stderr);
+			fputs("\033[92mdone.\033[0m\n", stderr);
 		}
 		else
 		{
-			fputs("Invalid command. Please type \"help\" for a list of available commands.\n", stderr);
+			fputs("\033[91mInvalid command\033[0m. Please type \033[90m\"help\"\033[0m for a list of available commands.\n", stderr);
 		}
 	}
 
@@ -452,7 +487,7 @@ void handleClient(SOCKET socket)
 {
 	SOCKADDR_STORAGE address;
 	int addressSize = sizeof(address);
-	getpeername(socket, (SOCKADDR *)&address, &addressSize);
+	getpeername(socket, (SOCKADDR*)&address, &addressSize);
 
 	unsigned int sufnameLen = 0xFFFFFFFEU;
 	unsigned long long fileLen = 0xFFFFFFFFFFFFFFFFULL;
@@ -462,10 +497,10 @@ void handleClient(SOCKET socket)
 	if (sufnameLen == 0xFFFFFFFFU)
 	{
 		recv(socket, (char*)(&fileLen), 8, 0);
-		char *str = new char[1024];
+		char* str = new char[1024];
 		sprintf(str, "Do you want to save it to the clipboard?\n"
 			"Choose \"Yes\" to save it to the clipboard, \"No\" to save it to a file, or \"Cancel\" to discard it.\n"
-			"From %s (%s), %llu bytes.", username[0], inet_ntoa(((SOCKADDR_IN *)(&address))->sin_addr), fileLen);
+			"From %s (%s), %llu bytes.", username[0], inet_ntoa(((SOCKADDR_IN*)(&address))->sin_addr), fileLen);
 		int result = MessageBox(nullptr, str, "File Transfer", MB_YESNOCANCEL | MB_ICONQUESTION);
 		if (result == IDYES)
 			saveToClipboard = true;
@@ -486,20 +521,20 @@ void handleClient(SOCKET socket)
 		sufname[sufnameLen] = '\0';
 		int slot = -1;
 		for (int i = 0; i < 64; ++i)
-			if (ip[i] == ((SOCKADDR_IN *)(&address))->sin_addr.s_addr && username[i][0] != '\0')
+			if (ip[i] == ((SOCKADDR_IN*)(&address))->sin_addr.s_addr && username[i][0] != '\0')
 			{
 				slot = i;
 				break;
 			}
 		recv(socket, (char*)(&fileLen), 8, 0);
-		char *str = new char[1536 + sufnameLen];
+		char* str = new char[1536 + sufnameLen];
 		sprintf(str, "Do you want to save it?\n"
 			"Choose \"Yes\" to save it, or \"No\" to discard it.\n"
-			"From %s (%s), %llu bytes.", slot == -1 ? "unknown" : username[slot], inet_ntoa(((SOCKADDR_IN *)(&address))->sin_addr), fileLen);
+			"From %s (%s), %llu bytes.", slot == -1 ? "unknown" : username[slot], inet_ntoa(((SOCKADDR_IN*)(&address))->sin_addr), fileLen);
 		int result = MessageBox(nullptr, str, "File Transfer", MB_YESNO | MB_ICONQUESTION);
 		if (result == IDNO)
 			ifSave = false;
-		delete []str;
+		delete[]str;
 	}
 	if (ifSave && fileLen != 0xFFFFFFFFFFFFFFFFULL)
 		if (saveToClipboard)
@@ -522,7 +557,7 @@ void handleClient(SOCKET socket)
 		else
 		{
 			OPENFILENAME ofn;
-			char filename[1024], *lpstrFilter = nullptr;
+			char filename[1024], * lpstrFilter = nullptr;
 
 			ZeroMemory(&ofn, sizeof(ofn));
 			ZeroMemory(filename, sizeof(filename));
