@@ -1,3 +1,10 @@
+// Fixed an issue that some words are disappeared.
+// Fixed an issue that the sender of clipboard's name is wrong.
+// Added the checking if the IP is allowed.
+// Added the checking if the name is not empty.
+// Added abbreviations of commands.
+// Added the function of shield. (not ready)
+
 #include <stdio.h>
 #include <string.h>
 #include <winsock2.h>
@@ -8,8 +15,8 @@
 
 // Must compile with -lws2_32 -lcomdlg32
 
-// Version 1.2
-const int versionId = 10002;
+// Version 1.3
+const int versionId = 10003;
 
 void reciever(SOCKET);
 
@@ -27,8 +34,8 @@ int main(int argc, char** argv)
 {
 	// for (int i = 0; i < 100; ++i)
 	// 	printf("%d: \033[%dmword\033[0m\n", i, i);
-	fputs("Welcome to the File and Clipboard Transfer 1.2 !\n", stderr);
-	fputs("Type \033[30m\"help\"\033[0m for a list of available commands.\n", stderr);
+	fputs("Welcome to the File and Clipboard Transfer 1.3 !\n", stderr);
+	fputs("Type \033[90m\"help\"\033[0m for a list of available commands.\n", stderr);
 
 	WSADATA wsaData;
 	if (WSAStartup(MAKEWORD(2, 2), &wsaData) != 0)
@@ -100,22 +107,23 @@ int main(int argc, char** argv)
 		else if (strcmp(s1, "help") == 0)
 		{
 			fputs("Available commands:\n", stderr);
-			fputs("\033[30m\"exit\"\033[0m - exit the program\n", stderr);
-			fputs("\033[30m\"help\"\033[0m - display this message\n", stderr);
-			fputs("\033[30m\"send <filename> to <username>\"\033[0m - send a file to a user\n", stderr);
-			fputs("\033[30m\"send \"<filename>\" to <username>\"\033[0m - send a file with special name to a user\n", stderr);
-			fputs("\033[30m\"send cp to <username>\"\033[0m - send your clipboard to a user\n", stderr);
-			fputs("\033[30m\"send <filename> to <groupname>\"\033[0m - send a file to all users in a group\n", stderr);
-			fputs("\033[30m\"send \"<filename>\" to <groupname>\"\033[0m - send a file with special name to all users in a group\n", stderr);
-			fputs("\033[30m\"send cp to <groupname>\"\033[0m - send your clipboard to all users in a group\n", stderr);
-			fputs("\033[30m\"newuser <username> <ip>\"\033[0m - create a new user\n", stderr);
-			fputs("\033[30m\"deleteuser <username>\"\033[0m - delete a user\n", stderr);
-			fputs("\033[30m\"newgroup <groupname>\"\033[0m - create a new group\n", stderr);
-			fputs("\033[30m\"adduser <username> to <groupname>\"\033[0m - add a user to a group\n", stderr);
-			fputs("\033[30m\"removeuser <username> from <groupname>\"\033[0m - remove a user from a group\n", stderr);
-			fputs("\033[30m\"listusers in <groupname>\"\033[0m - list all users in a group\n", stderr);
-			fputs("\033[30m\"deletegroup <groupname>\"\033[0m - delete a group\n", stderr);
-			fputs("\033[30m\"listgroups\"\033[0m - list all groups\n", stderr);
+			fputs("\033[90m\"exit\"\033[0m - exit the program\n", stderr);
+			fputs("\033[90m\"help\"\033[0m - display this message\n", stderr);
+			fputs("\033[90m\"send <filename> to <username>\"\033[0m - send a file to a user\n", stderr);
+			fputs("\033[90m\"send \"<filename>\" to <username>\"\033[0m - send a file with special name to a user\n", stderr);
+			fputs("\033[90m\"send cp to <username>\"\033[0m - send your clipboard to a user\n", stderr);
+			fputs("\033[90m\"send <filename> to <groupname>\"\033[0m - send a file to all users in a group\n", stderr);
+			fputs("\033[90m\"send \"<filename>\" to <groupname>\"\033[0m - send a file with special name to all users in a group\n", stderr);
+			fputs("\033[90m\"send cp to <groupname>\"\033[0m - send your clipboard to all users in a group\n", stderr);
+			fputs("\033[90m\"kill <username>\"\033[0m - shield a user\n", stderr);
+			fputs("\033[90m\"newuser(nu) <username> <ip>\"\033[0m - create a new user\n", stderr);
+			fputs("\033[90m\"deleteuser(du) <username>\"\033[0m - delete a user\n", stderr);
+			fputs("\033[90m\"newgroup(ng) <groupname>\"\033[0m - create a new group\n", stderr);
+			fputs("\033[90m\"adduser(au) <username> to <groupname>\"\033[0m - add a user to a group\n", stderr);
+			fputs("\033[90m\"removeuser(ru) <username> from <groupname>\"\033[0m - remove a user from a group\n", stderr);
+			fputs("\033[90m\"listusers(lu) in <groupname>\"\033[0m - list all users in a group\n", stderr);
+			fputs("\033[90m\"deletegroup(dg) <groupname>\"\033[0m - delete a group\n", stderr);
+			fputs("\033[90m\"listgroups(lg)\"\033[0m - list all groups\n", stderr);
 		}
 		else if (strcmp(s1, "send") == 0 && strcmp(s2, "cp") != 0 && strcmp(s3, "to") == 0)
 		{
@@ -172,22 +180,28 @@ int main(int argc, char** argv)
 						}
 						else if (s2[i] == '\\' || s2[i] == '/')
 							break;
-					send(clientSocket, (const char*)(&sufnameLen), 4, 0);
-					send(clientSocket, s2 + s2Len - sufnameLen, sufnameLen, 0);
+					bool flag = send(clientSocket, (const char*)(&sufnameLen), 4, 0) == 4;
+					if (flag)
+						flag &= send(clientSocket, s2 + s2Len - sufnameLen, sufnameLen, 0) == sufnameLen;
 					_fseeki64(file, 0, SEEK_END);
 					unsigned long long fileLen = _ftelli64(file);
 					_fseeki64(file, 0, SEEK_SET);
-					send(clientSocket, (const char*)(&fileLen), 8, 0);
+					if (flag)
+						flag &= send(clientSocket, (const char*)(&fileLen), 8, 0) == 8;
 					char buffer[1024];
 					while (fileLen > 0)
 					{
 						int len = fread(buffer, 1, fileLen > 1024 ? 1024 : fileLen, file);
-						send(clientSocket, buffer, len, 0);
+						if (flag)
+							flag &= send(clientSocket, buffer, len, 0) == len;
 						fileLen -= len;
 					}
 					fclose(file);
 					closesocket(clientSocket);
-					fputs("\033[92mdone.\033[0m\n", stderr);
+					if (flag)
+						fputs("\033[92mdone.\033[0m\n", stderr);
+					else
+						fputs("\033[91mfailed.\033[0m\n", stderr);
 				}
 		}
 		else if (strcmp(s1, "send") == 0 && strcmp(s2, "cp") == 0 && strcmp(s3, "to") == 0)
@@ -240,20 +254,41 @@ int main(int argc, char** argv)
 									++dataLen;
 								dataLen <<= 1;
 								const unsigned int value = 0xFFFFFFFF;
-								send(clientSocket, (const char*)(&value), 4, 0);
-								send(clientSocket, (const char*)(&dataLen), 8, 0);
-								send(clientSocket, (const char*)(data), dataLen, 0);
+								bool flag = send(clientSocket, (const char*)(&value), 4, 0) == 4;
+								if (flag)
+									flag &= send(clientSocket, (const char*)(&dataLen), 8, 0) == 8;
+								if (flag)
+									flag &= send(clientSocket, (const char*)(data), dataLen, 0) == dataLen;
+								if (flag)
+									fputs("\033[92mdone.\033[0m\n", stderr);
+								else
+									fputs("\033[91mfailed.\033[0m\n", stderr);
 							}
+							else
+								fputs("\033[91mGlobalLock failed.\033[0m\n", stderr);
 							GlobalUnlock(hData);
 						}
+						else
+							fputs("\033[91mGetClipboardData failed.\033[0m\n", stderr);
 						CloseClipboard();
 					}
+					else
+						fputs("\033[91mOpenClipboard failed.\033[0m\n", stderr);
 					closesocket(clientSocket);
-					fputs("\033[92mdone.\033[0m\n", stderr);
 				}
 		}
-		else if (strcmp(s1, "newuser") == 0)
+		else if (strcmp(s1, "newuser") == 0 || strcmp(s1, "nu") == 0)
 		{
+			if (s2[0] == '\0')
+			{
+				fputs("\033[91mUsername cannot be empty.\033[0m\n", stderr);
+				continue;
+			}
+			if (inet_addr(s3) == INADDR_NONE)
+			{
+				fputs("\033[91mInvalid IP address.\033[0m\n", stderr);
+				continue;
+			}
 			bool flag = false;
 			for (int i = 0; i < 64; ++i)
 				if (strcmp(s2, username[i]) == 0)
@@ -291,7 +326,7 @@ int main(int argc, char** argv)
 			usersInGroup[0] |= 1ULL << emptySlot;
 			fputs("\033[92mUser created.\033[0m\n", stderr);
 		}
-		else if (strcmp(s1, "deleteuser") == 0)
+		else if (strcmp(s1, "deleteuser") == 0 || strcmp(s1, "du") == 0)
 		{
 			int slot = -1;
 			for (int i = 0; i < 64; ++i)
@@ -311,8 +346,13 @@ int main(int argc, char** argv)
 			ip[slot] = 0;
 			fputs("\033[92mUser deleted.\033[0m\n", stderr);
 		}
-		else if (strcmp(s1, "newgroup") == 0)
+		else if (strcmp(s1, "newgroup") == 0 || strcmp(s1, "ng") == 0)
 		{
+			if (s2[0] == '\0')
+			{
+				fputs("\033[91mGroup name cannot be empty.\033[0m\n", stderr);
+				continue;
+			}
 			bool flag = false;
 			for (int i = 0; i < 64; ++i)
 				if (strcmp(s2, groupname[i]) == 0)
@@ -349,7 +389,7 @@ int main(int argc, char** argv)
 			usersInGroup[emptySlot] = 0;
 			fputs("\033[92mGroup created.\033[0m\n", stderr);
 		}
-		else if (strcmp(s1, "adduser") == 0 && strcmp(s3, "to") == 0)
+		else if ((strcmp(s1, "adduser") == 0 || strcmp(s1, "au") == 0) && strcmp(s3, "to") == 0)
 		{
 			int userSlot = -1, groupSlot = -1;
 			for (int i = 0; i < 64; ++i)
@@ -376,7 +416,7 @@ int main(int argc, char** argv)
 			usersInGroup[groupSlot] |= 1ULL << userSlot;
 			fputs("\033[92mUser added to group.\033[0m\n", stderr);
 		}
-		else if (strcmp(s1, "removeuser") == 0 && strcmp(s3, "from") == 0)
+		else if ((strcmp(s1, "removeuser") == 0 || strcmp(s1, "ru") == 0) && strcmp(s3, "from") == 0)
 		{
 			int userSlot = -1, groupSlot = -1;
 			for (int i = 0; i < 64; ++i)
@@ -403,7 +443,7 @@ int main(int argc, char** argv)
 			usersInGroup[groupSlot] &= ~(1ULL << userSlot);
 			fputs("\033[92mUser removed from group.\033[0m\n", stderr);
 		}
-		else if (strcmp(s1, "listusers") == 0 && strcmp(s2, "in") == 0)
+		else if ((strcmp(s1, "listusers") == 0 || strcmp(s1, "lu") == 0) && strcmp(s2, "in") == 0)
 		{
 			int slot = -1;
 			for (int i = 0; i < 64; ++i)
@@ -424,7 +464,7 @@ int main(int argc, char** argv)
 				}
 			fputs("\033[92mdone.\033[0m\n", stderr);
 		}
-		else if (strcmp(s1, "deletegroup") == 0)
+		else if (strcmp(s1, "deletegroup") == 0 || strcmp(s1, "dg") == 0)
 		{
 			int slot = -1;
 			for (int i = 0; i < 64; ++i)
@@ -447,7 +487,7 @@ int main(int argc, char** argv)
 			usersInGroup[slot] = 0;
 			fputs("\033[92mGroup deleted.\033[0m\n", stderr);
 		}
-		else if (strcmp(s1, "listgroups") == 0)
+		else if (strcmp(s1, "listgroups") == 0 || strcmp(s1, "lg") == 0)
 		{
 			for (int i = 0; i < 64; ++i)
 				if (groupname[i][0] != '\0')
@@ -496,16 +536,24 @@ void handleClient(SOCKET socket)
 	char* sufname = nullptr;
 	if (sufnameLen == 0xFFFFFFFFU)
 	{
+		int slot = -1;
+		for (int i = 0; i < 64; ++i)
+			if (ip[i] == ((SOCKADDR_IN*)(&address))->sin_addr.s_addr && username[i][0] != '\0')
+			{
+				slot = i;
+				break;
+			}
 		recv(socket, (char*)(&fileLen), 8, 0);
 		char* str = new char[1024];
 		sprintf(str, "Do you want to save it to the clipboard?\n"
 			"Choose \"Yes\" to save it to the clipboard, \"No\" to save it to a file, or \"Cancel\" to discard it.\n"
-			"From %s (%s), %llu bytes.", username[0], inet_ntoa(((SOCKADDR_IN*)(&address))->sin_addr), fileLen);
+			"From %s (%s), %llu bytes.", slot == -1 ? "unknown" : username[slot], inet_ntoa(((SOCKADDR_IN*)(&address))->sin_addr), fileLen);
 		int result = MessageBox(nullptr, str, "File Transfer", MB_YESNOCANCEL | MB_ICONQUESTION);
 		if (result == IDYES)
 			saveToClipboard = true;
-		else if (result == IDCANCEL)
+		else if (result != IDNO)
 			ifSave = false;
+		delete[]str;
 	}
 	else if (sufnameLen == 0xFFFFFFFEU)
 	{
@@ -532,7 +580,7 @@ void handleClient(SOCKET socket)
 			"Choose \"Yes\" to save it, or \"No\" to discard it.\n"
 			"From %s (%s), %llu bytes.", slot == -1 ? "unknown" : username[slot], inet_ntoa(((SOCKADDR_IN*)(&address))->sin_addr), fileLen);
 		int result = MessageBox(nullptr, str, "File Transfer", MB_YESNO | MB_ICONQUESTION);
-		if (result == IDNO)
+		if (result != IDYES)
 			ifSave = false;
 		delete[]str;
 	}
